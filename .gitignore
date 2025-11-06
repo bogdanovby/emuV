@@ -1,0 +1,45 @@
+# Compiled kernel modules
+*.ko
+*.o
+*.mod
+*.mod.c
+*.mod.o
+*.cmd
+
+# Kernel build artifacts
+.*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Module.markers
+
+# Compiled binaries
+test_emuv
+stress_test_emuv
+vram_usage_test
+*.out
+
+# Editor files
+*~
+*.swp
+*.swo
+.*.sw?
+.DS_Store
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Log files
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
