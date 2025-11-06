@@ -7,7 +7,7 @@
 sudo apt-get install build-essential linux-headers-$(uname -r)
 
 # Clone repository
-git clone https://github.com/yourusername/emuv.git
+git clone https://github.com/bogdanovby/emuV.git
 cd emuv
 
 # Build the driver
