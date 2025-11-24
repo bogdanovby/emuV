@@ -1,8 +1,12 @@
 /*
- * emuV - Virtual GPU Memory Emulator
- * Linux kernel driver for emulating additional VRAM using system RAM
+ * emuV v2.0 - Virtual GPU Memory Emulator with Auto Spillover
  * 
- * Supports NVIDIA GeForce RTX 40xx/50xx series
+ * Automatic GPU detection and GPU → RAM memory overflow
+ * Supports all NVIDIA GeForce GPUs with automatic detection
+ * 
+ * Copyright (C) 2025 emuV Project Contributors
+ * 
+ * Date: November 24, 2025
  */
 
 #include <linux/module.h>
@@ -21,16 +25,16 @@
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("emuV Project Contributors");
-MODULE_DESCRIPTION("emuV - Virtual GPU Memory Emulator for NVIDIA GeForce");
-MODULE_VERSION("1.0.0");
+MODULE_DESCRIPTION("emuV v2.0 - Virtual GPU Memory Emulator with Auto Spillover");
+MODULE_VERSION("2.0.0");
 
 #define DRIVER_NAME "emuv"
 #define DEVICE_NAME "emuv"
 
 // Module parameters for configuration
 static int gpu_model = DEFAULT_GPU_MODEL;
-static int physical_vram_gb = 8;
-static int virtual_vram_gb = 2;
+static int physical_vram_gb = 6;
+static int virtual_vram_gb = 10;
 static bool lazy_allocation = DEFAULT_LAZY_ALLOCATION;
 static int debug_mode = DEFAULT_DEBUG_MODE;
 
@@ -80,7 +84,39 @@ static struct emuv_device *emuv_dev = NULL;
 static int major_number = 0;
 static struct class *emuv_class = NULL;
 
-// Функция для чтения информации о видеопамяти
+#define NVIDIA_VENDOR_ID 0x10DE
+
+// Auto-detect NVIDIA GPU
+static struct pci_dev* emuv_detect_nvidia_gpu(char *gpu_name, size_t name_len)
+{
+    struct pci_dev *pdev = NULL;
+    
+    while ((pdev = pci_get_device(NVIDIA_VENDOR_ID, PCI_ANY_ID, pdev))) {
+        // Check if it's a VGA controller (class 0x030000)
+        if ((pdev->class >> 16) == 0x03) {
+            // Get GPU name from PCI device
+            snprintf(gpu_name, name_len, "NVIDIA GPU %04x:%04x", 
+                    pdev->vendor, pdev->device);
+            
+            pr_info("emuv: Auto-detected NVIDIA GPU: %04x:%04x at %s\n",
+                   pdev->vendor, pdev->device, pci_name(pdev));
+            
+            // Try to get a better name from our database
+            const struct gpu_info* info = emuv_get_gpu_info(gpu_model);
+            if (info) {
+                strncpy(gpu_name, info->name, name_len - 1);
+                gpu_name[name_len - 1] = '\0';
+            }
+            
+            return pdev;
+        }
+    }
+    
+    pr_warn("emuv: No NVIDIA GPU detected, using virtual mode\n");
+    snprintf(gpu_name, name_len, "NVIDIA GeForce (Virtual)");
+    return NULL;
+}
+
 // Helper function to get GPU info
 const struct gpu_info* emuv_get_gpu_info(int model)
 {
@@ -119,7 +155,7 @@ static ssize_t vram_info_show(struct device *dev, struct device_attribute *attr,
 
 static DEVICE_ATTR_RO(vram_info);
 
-// Функция для инициализации видеопамяти
+// Initialize VRAM
 static int emuv_init_vram(struct emuv_device *dev)
 {
     int ret = 0;
@@ -132,21 +168,20 @@ static int emuv_init_vram(struct emuv_device *dev)
     pr_info("emuv: Total VRAM: %llu GB\n", 
             dev->total_vram_size / (1024ULL * 1024 * 1024));
     
-    // Не выделяем реальную память сразу - используем lazy allocation
-    // Виртуальная VRAM будет выделяться по требованию при реальном использовании
-    // Пока что просто эмулируем размер для отображения информации
-    dev->virtual_vram = NULL;  // Будет выделено при необходимости
+    // Use lazy allocation - don't allocate real memory immediately
+    // Virtual VRAM will be allocated on demand during actual use
+    dev->virtual_vram = NULL;  // Will be allocated when needed
     
-    // Для физической VRAM мы будем использовать существующую видеокарту
-    // В реальной реализации здесь будет маппинг реальной VRAM
-    dev->physical_vram = NULL;  // Будет установлен при обнаружении реального GPU
+    // Physical VRAM uses existing GPU memory
+    // In real implementation, this would map to actual VRAM
+    dev->physical_vram = NULL;  // Will be set when real GPU is detected
     
     pr_info("emuv: VRAM initialized successfully (lazy allocation)\n");
     pr_info("emuv: Virtual VRAM will be allocated on demand\n");
     return ret;
 }
 
-// Функция для освобождения видеопамяти
+// Cleanup VRAM
 static void emuv_cleanup_vram(struct emuv_device *dev)
 {
     if (dev->virtual_vram) {
@@ -157,7 +192,7 @@ static void emuv_cleanup_vram(struct emuv_device *dev)
     pr_info("emuv: VRAM cleaned up\n");
 }
 
-// Функция для чтения/записи в видеопамять
+// Read/write to VRAM
 static __maybe_unused int emuv_vram_read(struct emuv_device *dev, unsigned long offset, 
                           void *buffer, size_t size)
 {
@@ -167,16 +202,16 @@ static __maybe_unused int emuv_vram_read(struct emuv_device *dev, unsigned long 
         return -EINVAL;
     }
     
-    // Если запрос в пределах физической VRAM
+    // If request is within physical VRAM
     if (total_offset < dev->physical_vram_size) {
-        // В реальной реализации здесь будет чтение из реальной VRAM
-        // Пока просто возвращаем нули
+        // In real implementation, this would read from actual VRAM
+        // For now, just return zeros
         memset(buffer, 0, size);
     } else {
-        // Чтение из виртуальной VRAM
+        // Read from virtual VRAM
         unsigned long virtual_offset = total_offset - dev->physical_vram_size;
         
-        // Lazy allocation: выделяем память при первом обращении
+        // Lazy allocation: allocate memory on first access
         if (!dev->virtual_vram) {
             dev->virtual_vram = vmalloc(dev->virtual_vram_size);
             if (!dev->virtual_vram) {
@@ -278,12 +313,12 @@ static const struct file_operations emuv_fops = {
     .read = emuv_read,
 };
 
-// Функция для создания виртуального устройства (независимо от PCI)
+// Create virtual device (independent from PCI)
 static int emuv_create_device(struct emuv_device *dev)
 {
     int ret = 0;
     
-    // Регистрируем символьное устройство
+    // Register character device
     if (major_number) {
         dev->devt = MKDEV(major_number, 0);
         ret = register_chrdev_region(dev->devt, 1, DEVICE_NAME);
@@ -350,7 +385,7 @@ err_chrdev:
     return ret;
 }
 
-// Функция для удаления виртуального устройства
+// Destroy virtual device
 static void emuv_destroy_device(struct emuv_device *dev)
 {
     if (!dev || !dev->initialized) {
@@ -375,7 +410,7 @@ static void emuv_destroy_device(struct emuv_device *dev)
     }
 }
 
-// Функция для инициализации устройства через PCI
+// Initialize device via PCI
 static int emuv_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
     int ret = 0;
@@ -391,6 +426,22 @@ static int emuv_probe(struct pci_dev *pdev, const struct pci_device_id *id)
     }
     
     dev->pdev = pdev;
+    
+    // Устанавливаем размеры памяти
+    dev->physical_vram_size = (u64)physical_vram_gb * 1024 * 1024 * 1024;
+    dev->virtual_vram_size = (u64)virtual_vram_gb * 1024 * 1024 * 1024;
+    dev->total_vram_size = dev->physical_vram_size + dev->virtual_vram_size;
+    dev->lazy_alloc = lazy_allocation;
+    
+    // Получаем информацию о GPU
+    const struct gpu_info *gpu = emuv_get_gpu_info(gpu_model);
+    if (gpu) {
+        dev->config.gpu_name = gpu->name;
+        dev->config.pci_device_id = gpu->device_id;
+        dev->config.pci_vendor_id = gpu->vendor_id;
+    } else {
+        dev->config.gpu_name = "Unknown GPU";
+    }
     
     // Включаем устройство
     ret = pci_enable_device(pdev);
@@ -419,8 +470,9 @@ static int emuv_probe(struct pci_dev *pdev, const struct pci_device_id *id)
     dev->initialized = true;
     
     pr_info("emuv: Virtual GPU device initialized successfully\n");
-    pr_info("emuv: Total VRAM: %llu GB (8 GB physical + 2 GB virtual)\n",
-            dev->total_vram_size / (1024ULL * 1024 * 1024));
+    pr_info("emuv: Total VRAM: %llu GB (%d GB physical + %d GB virtual)\n",
+            dev->total_vram_size / (1024ULL * 1024 * 1024),
+            physical_vram_gb, virtual_vram_gb);
     
     return 0;
     
@@ -433,7 +485,7 @@ err_free:
     return ret;
 }
 
-// Функция для удаления устройства
+// Remove device
 static void emuv_remove(struct pci_dev *pdev)
 {
     struct emuv_device *dev = pci_get_drvdata(pdev);
@@ -475,19 +527,61 @@ static int __init emuv_init(void)
 {
     int ret;
     struct emuv_device *dev;
+    const struct gpu_info *gpu;
     
     pr_info("emuv: Initializing virtual GPU driver\n");
-    pr_info("emuv: Emulating Nvidia GeForce RTX 4070\n");
-    pr_info("emuv: VRAM configuration: 8 GB physical + 2 GB virtual = 10 GB total\n");
     
-    // Создаем виртуальное устройство независимо от PCI
+    // Auto-detect NVIDIA GPU
+    char gpu_name_buf[256];
+    struct pci_dev *nvidia_pdev = emuv_detect_nvidia_gpu(gpu_name_buf, sizeof(gpu_name_buf));
+    
+    if (nvidia_pdev) {
+        pr_info("emuv: Detected GPU: %s\n", gpu_name_buf);
+        pci_dev_put(nvidia_pdev);  // Release reference
+    } else {
+        pr_info("emuv: No GPU detected, using virtual mode\n");
+    }
+    
+    // Get GPU info from database (fallback)
+    gpu = emuv_get_gpu_info(gpu_model);
+    if (gpu) {
+        pr_info("emuv: Emulating %s\n", gpu->name);
+    }
+    
+    pr_info("emuv: VRAM configuration: %d GB physical + %d GB virtual = %d GB total\n",
+            physical_vram_gb, virtual_vram_gb, physical_vram_gb + virtual_vram_gb);
+    
+    // Create virtual device (independent from PCI)
     dev = kzalloc(sizeof(struct emuv_device), GFP_KERNEL);
     if (!dev) {
         pr_err("emuv: Failed to allocate device structure\n");
         return -ENOMEM;
     }
     
-    // Инициализируем видеопамять
+    // Set memory sizes
+    dev->physical_vram_size = (u64)physical_vram_gb * 1024 * 1024 * 1024;
+    dev->virtual_vram_size = (u64)virtual_vram_gb * 1024 * 1024 * 1024;
+    dev->total_vram_size = dev->physical_vram_size + dev->virtual_vram_size;
+    dev->lazy_alloc = lazy_allocation;
+    
+    // Set GPU information (use auto-detected or fallback to database)
+    if (nvidia_pdev) {
+        // Use auto-detected GPU name
+        dev->config.gpu_name = kstrdup(gpu_name_buf, GFP_KERNEL);
+        if (!dev->config.gpu_name) {
+            dev->config.gpu_name = "NVIDIA GPU (Detected)";
+        }
+    } else if (gpu) {
+        dev->config.gpu_name = gpu->name;
+        dev->config.pci_device_id = gpu->device_id;
+        dev->config.pci_vendor_id = gpu->vendor_id;
+    } else {
+        dev->config.gpu_name = "NVIDIA GeForce (Virtual)";
+        dev->config.pci_device_id = 0x2786;
+        dev->config.pci_vendor_id = 0x10DE;
+    }
+    
+    // Initialize VRAM
     ret = emuv_init_vram(dev);
     if (ret) {
         pr_err("emuv: Failed to initialize VRAM\n");
@@ -495,7 +589,7 @@ static int __init emuv_init(void)
         return ret;
     }
     
-    // Создаем устройство
+    // Create device
     ret = emuv_create_device(dev);
     if (ret) {
         pr_err("emuv: Failed to create device\n");
@@ -508,16 +602,20 @@ static int __init emuv_init(void)
     dev->initialized = true;
     
     pr_info("emuv: Virtual GPU device created successfully\n");
-    pr_info("emuv: Total VRAM: %llu GB (8 GB physical + 2 GB virtual)\n",
-            dev->total_vram_size / (1024ULL * 1024 * 1024));
+    pr_info("emuv: Total VRAM: %llu GB (%d GB physical + %d GB virtual)\n",
+            dev->total_vram_size / (1024ULL * 1024 * 1024),
+            physical_vram_gb, virtual_vram_gb);
+    pr_info("emuv: Allocation strategy: %s\n", lazy_allocation ? "Lazy" : "Eager");
     
-    // Регистрируем PCI драйвер (опционально, для будущей интеграции)
+    // Register PCI driver (optional, for future integration)
     ret = pci_register_driver(&emuv_driver);
     if (ret) {
         pr_warn("emuv: Failed to register PCI driver (device will work standalone)\n");
     }
     
     pr_info("emuv: Driver initialized successfully\n");
+    pr_info("emuv: Device available at /dev/emuv\n");
+    pr_info("emuv: VRAM info at /sys/class/emuv/emuv/vram_info\n");
     return 0;
 }
 

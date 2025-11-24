@@ -34,8 +34,8 @@ reload: unload load
 
 # Parameters for loading (can be overridden)
 GPU_MODEL ?= 4070
-PHYS_VRAM ?= 8
-VIRT_VRAM ?= 2
+PHYS_VRAM ?= 6
+VIRT_VRAM ?= 10
 
 # Test targets
 tests: all

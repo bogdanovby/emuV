@@ -1,45 +1,71 @@
-# Compiled kernel modules
+# Compiled kernel module
 *.ko
 *.o
 *.mod
 *.mod.c
-*.mod.o
-*.cmd
-
-# Kernel build artifacts
 .*.cmd
-.tmp_versions/
-modules.order
+*.o.d
 Module.symvers
-Module.markers
+modules.order
+.tmp_versions/
+*.order
+*.symvers
 
-# Compiled binaries
-test_emuv
-stress_test_emuv
-vram_usage_test
-*.out
+# Build files
+.module-common.o
 
-# Editor files
-*~
-*.swp
-*.swo
-.*.sw?
-.DS_Store
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# IDE files
+# Virtual environments
+venv/
+ENV/
+env/
+llm_env/
+
+# IDE
 .vscode/
 .idea/
-*.sublime-*
+*.swp
+*.swo
+*~
+
+# Test executables
+tests/test_emuv
+tests/stress_test_emuv
+tests/vram_usage_test
+test_12gb_load
+
+# Documentation (generated)
+docs/_build/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Backup files
 *.bak
-*.backup
-*.orig
-
-# Log files
-*.log
-
-# Temporary files
-tmp/
-temp/
-*.tmp
+*~

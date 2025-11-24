@@ -105,18 +105,22 @@ echo ""
 echo "7. Проверка информации о VRAM:"
 if [ -f "/sys/class/emuv/emuv/vram_info" ]; then
     VRAM_INFO=$(cat /sys/class/emuv/emuv/vram_info)
-    if echo "$VRAM_INFO" | grep -q "10 GB\|10240 MB"; then
-        check "Общий объем VRAM = 10 GB"
+    if echo "$VRAM_INFO" | grep -q "16 GB\|16384 MB"; then
+        check "Общий объем VRAM = 16 GB"
     else
-        echo -e "${YELLOW}⚠${NC} Общий объем VRAM не равен 10 GB"
+        echo -e "${YELLOW}⚠${NC} Общий объем VRAM не равен 16 GB (проверьте параметры загрузки модуля)"
     fi
     
-    if echo "$VRAM_INFO" | grep -q "8 GB\|8192 MB"; then
-        check "Физическая VRAM = 8 GB"
+    if echo "$VRAM_INFO" | grep -q "6 GB\|6144 MB"; then
+        check "Физическая VRAM = 6 GB"
+    else
+        echo -e "${YELLOW}⚠${NC} Физическая VRAM не равна 6 GB (может быть настроена иначе)"
     fi
     
-    if echo "$VRAM_INFO" | grep -q "2 GB\|2048 MB"; then
-        check "Виртуальная VRAM = 2 GB"
+    if echo "$VRAM_INFO" | grep -q "10 GB\|10240 MB"; then
+        check "Виртуальная VRAM = 10 GB"
+    else
+        echo -e "${YELLOW}⚠${NC} Виртуальная VRAM не равна 10 GB (может быть настроена иначе)"
     fi
 fi
 echo ""
