@@ -880,7 +880,7 @@ with torch.profiler.profile(
 - Dashboard для мониторинга
 
 **Ссылки**:
-- GitHub: https://github.com/yourusername/emuv
+- GitHub: [https://github.com/bogdanovby/emuv](https://github.com/bogdanovby/emuv)
 - Документация: /docs/
 - Community: GitHub Discussions
 
