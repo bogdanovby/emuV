@@ -1216,7 +1216,7 @@ python train.py
 ```
 
 **Links**:
-- GitHub: [https://github.com/yourusername/emuv](https://github.com/bogdanovby/emuv)
+- GitHub: [https://github.com/bogdanovby/emuv](https://github.com/bogdanovby/emuv)
 - Documentation: /docs/
 - Community: GitHub Discussions
 - Issues: GitHub Issues
