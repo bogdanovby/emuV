@@ -441,20 +441,10 @@ GPL v2 - See [LICENSE](LICENSE) for details.
 
 ## 📧 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/emuV/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/emuV/discussions)
+- **Issues**: pavel@bahdanau.pl
 
 ---
 
-<div align="center">
-
-**Made with ❤️ for the ML community**
-
-[![Star this repo](https://img.shields.io/github/stars/yourusername/emuV?style=social)](https://github.com/yourusername/emuV)
-
-</div>
-
----
 
 ## 🎯 Quick Reference
 
